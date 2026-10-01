@@ -76,6 +76,15 @@ export const SOLID = Uint8Array.from(MATERIALS, m => (m && m.solid ? 1 : 0));
 export const LOOSE = Uint8Array.from(MATERIALS, m => (m && m.loose ? 1 : 0));
 export const SCORCHABLE = Uint8Array.from(MATERIALS, m => (m && m.scorch ? 1 : 0));
 export const BLAST = Uint8Array.from(MATERIALS, (m, i) => (!m || m.blast === 'AIR' ? 0 : m.blast === 'SELF' ? i : T[m.blast]));
+// What a material ends up as once a laser or drill has worked right through
+// it: BLAST applied repeatedly, so boulders go cracked → air in one pass
+// instead of leaving a solid cracked plug. Indestructible materials (or
+// anything whose chain ends in one) keep that material, which stops the bore.
+export const BORE = Uint8Array.from(MATERIALS, (_, i) => {
+  let v = i;
+  for (let n = 0; n < MATERIALS.length && v && BLAST[v] !== v; n++) v = BLAST[v];
+  return v;
+});
 export const RUBBLE = Uint8Array.from(MATERIALS, m => (m && m.rubble ? T[m.rubble] : 0));
 export const T_BASE = MATERIALS.map(m => (m ? packColor(m.color) : 0));
 export const T_LIGHT = MATERIALS.map(m => (m ? packColor(mix(m.color, '#fff4d6', 0.25)) : 0));

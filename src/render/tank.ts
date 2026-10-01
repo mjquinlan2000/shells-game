@@ -31,6 +31,19 @@ export function drawTankBody(t: Tank, active: boolean, colors: TankColors) {
   const bx = Math.round(tip.x), by = Math.round(tip.y);
   pixelLine(px, py + 1, bx, by + 1, t.alive ? '#5c566b' : '#26222e');
   pixelLine(px, py, bx, by, t.alive ? '#d8d4e6' : '#4a4252');
+  // Dotted aim guide from the barrel tip, scaling with power.
+  if (active && t.alive) {
+    const angRad = (t.angle * Math.PI) / 180;
+    const cosA = Math.cos(angRad), sinA = -Math.sin(angRad);
+    const guideLen = Math.round((t.power / 100) * 50);
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = colors.light;
+    for (let d = 3; d <= guideLen; d += 3) {
+      ctx.fillRect(Math.round(tip.x + cosA * d), Math.round(tip.y + sinA * d), 1, 1);
+    }
+    ctx.restore();
+  }
 
   // Hull: rotated pixel by pixel. For every screen pixel around the tank we
   // rotate back into sprite space and copy the nearest sprite pixel — this
@@ -49,6 +62,24 @@ export function drawTankBody(t: Tank, active: boolean, colors: TankColors) {
       ctx.fillStyle = palette[ch];
       ctx.fillRect(t.x + dx, t.y + dy, 1, 1);
     }
+  }
+  // Faint steel-blue shield outline and shimmer around the hull when armored.
+  if (t.alive && t.armor > 0) {
+    ctx.save();
+    const shimmer = 0.35 + Math.sin(game.ticks * 0.15 + t.x) * 0.15;
+    ctx.globalAlpha = shimmer;
+    ctx.fillStyle = '#8fd3ff';
+    const steps = 36;
+    for (let i = 0; i < steps; i++) {
+      const th = (i / steps) * Math.PI * 2;
+      if (Math.sin(th * 5 + game.ticks * 0.1) < -0.3) continue;
+      const ex = Math.round(Math.cos(th) * 14);
+      const ey = Math.round(Math.sin(th) * 8);
+      const wx = Math.round(t.x + ex * cos - ey * sin);
+      const wy = Math.round(t.y - 4 + ex * sin + ey * cos);
+      ctx.fillRect(wx, wy, 1, 1);
+    }
+    ctx.restore();
   }
 
   if (t.flash > 3) {

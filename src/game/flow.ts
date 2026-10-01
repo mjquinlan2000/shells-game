@@ -1,7 +1,10 @@
 import { setLoop, sfxBlip, sfxCrank, stopLoops, toggleMute } from '../audio';
+import { closeDevMenu, updateDevMenu } from '../dev';
 import { startDying } from '../combat/death';
+import { cratesBusy, maybeDropCrate, resetCrates, updateCrates } from '../combat/crates';
 import { updateParticle } from '../combat/effects';
 import { fire, updateProjectile } from '../combat/projectiles';
+import { resetWeapons, updateWeapons, weaponsBusy } from '../combat/weapons';
 import { MAX_SLOPE, findSpawnX, groundSlope, makeTank, tryMove, updateTank, type Tank } from '../combat/tanks';
 import { MOVE_FUEL, VW, W, WEAPONS } from '../config';
 import { IMPACT_LINGER, LOOK_RESET_KEYS, camera, updateCamera } from './camera';
@@ -43,9 +46,12 @@ export function resetEffects() {
   game.hitstop = 0;
   game.flash = 0;
   game.banner = null;
+  resetWeapons();
+  resetCrates();
 }
 
 export function startGame(players: number) {
+  if (DEV) closeDevMenu();
   const xs = newScenery(players);
   resetEffects();
   game.tanks = xs.map((x, i) => {
@@ -75,6 +81,7 @@ export function beginTurn() {
 export function nextTurn() {
   do game.current = (game.current + 1) % game.tanks.length; while (!game.tanks[game.current].alive);
   game.wind = clamp(game.wind + randInt(-3, 3), -10, 10);
+  maybeDropCrate();  // sometimes a supply crate parachutes in
   beginTurn();
 }
 
@@ -114,11 +121,15 @@ export function updateAim() {
 
 export function updateResolving() {
   // Wait until everything that can still change the terrain or move a tank
-  // has finished: shells, explosions, flying dirt, settling dirt, falling tanks.
+  // has finished: shells, explosions, flying dirt, settling dirt, falling
+  // tanks, special weapons (laser beams, pending airstrikes) and crates in
+  // free fall (they can land on a tank and be collected).
   const busy = game.projectiles.length > 0 ||
     game.explosions.length > 0 ||
     game.particles.some(p => p.kind === 'debris') ||
     terrainSettling() ||
+    weaponsBusy() ||
+    cratesBusy() ||
     game.tanks.some(t => t.falling || t.sliding || t.dying > 0);
   if (busy) {
     game.resolveDelay = 20;
@@ -161,6 +172,7 @@ export function update() {
     updateBackground();
     for (const p of game.projectiles) updateProjectile(p);
     game.projectiles = game.projectiles.filter(p => !p.dead);
+    updateWeapons();
     for (const p of game.particles) updateParticle(p);
     game.particles = game.particles.filter(p => p.life > 0);
     for (const e of game.explosions) e.age++;
@@ -169,6 +181,7 @@ export function update() {
     game.floaters = game.floaters.filter(f => f.life > 0);
     for (let pass = 0; pass < 4; pass++) settleTerrain();
     for (const t of game.tanks) updateTank(t);
+    updateCrates();
     if (game.banner && ++game.banner.age >= game.banner.life) game.banner = null;
   }
   // The shake keeps going through the freeze, which sells the impact.
@@ -182,15 +195,22 @@ export function update() {
       }
       break;
     case 'aim':
-      updateAim();
+      if (DEV && updateDevMenu()) {
+        // Cheat menu is open: world simulates, but tank controls are suppressed.
+      } else {
+        updateAim();
+      }
       break;
     case 'flying':
+      if (DEV) closeDevMenu();
       if (game.projectiles.length === 0) game.state = 'resolving';
       break;
     case 'resolving':
+      if (DEV) closeDevMenu();
       updateResolving();
       break;
     case 'gameover':
+      if (DEV) closeDevMenu();
       if (pressed.has('Enter')) goToTitle();
       break;
   }
@@ -219,6 +239,7 @@ export function update() {
 
 export function goToTitle() {
   game.state = 'title';
+  if (DEV) closeDevMenu();
   game.tanks = [];
   resetEffects();
   newScenery();

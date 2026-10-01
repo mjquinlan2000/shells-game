@@ -1,4 +1,4 @@
-import { H, HUD_H, VW, W } from '../config';
+import { H, VW, W } from '../config';
 import { rand, randInt } from '../util/math';
 import { T, setPixel, surfaceY } from './terrain';
 
@@ -72,7 +72,7 @@ export function makeMonolith(cx: number): boolean | void {
   for (let dx = -w; dx <= w; dx++) base = Math.max(base, surfaceY(cx + dx));
   base += 4;  // planted into the ground
   const top = base - h;
-  if (top < HUD_H + 30) return false;
+  if (top < 47) return false;  // keep tall rocks out of the top of the sky
   for (let y = top; y <= base; y++) {
     const fromTop = y - top;
     const half = w - (fromTop < 3 ? 3 - fromTop : 0);  // bevelled top
@@ -96,8 +96,8 @@ export function makeIsland(cx: number, hw: number): boolean | void {
   for (let x = cx - hw; x <= cx + hw; x++) highest = Math.min(highest, surfaceY(x));
   const depth = Math.round(hw * 0.6);
   const lowestTop = highest - 30 - depth;
-  if (lowestTop < HUD_H + 40) return false;
-  const ty = randInt(HUD_H + 40, lowestTop);
+  if (lowestTop < 57) return false;  // islands float below the minimap and roster
+  const ty = randInt(57, lowestTop);
   for (let x = cx - hw; x <= cx + hw; x++) {
     const u = (x - cx) / hw;
     const topY = ty + Math.round(u * u * 3 + rand(0, 1));

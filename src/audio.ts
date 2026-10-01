@@ -328,3 +328,174 @@ export function sfxDistantBoom(size: number): void {
   src.start(t);
   src.stop(t + 0.9);
 }
+
+// Bright rising chime for collecting a supply crate. Everything starts at
+// once (a quick upward sweep over a major chord) rather than as delayed
+// notes: audio delays must be counted in game ticks so resets cancel them,
+// and a pickup is short enough not to need any.
+export function sfxPickup(): void {
+  tone('triangle', 523.25, 1046.5, 0.18, 0.12);  // C5 sweeping up an octave
+  tone('triangle', 659.25, 659.25, 0.22, 0.07);  // E5
+  tone('triangle', 783.99, 783.99, 0.26, 0.06);  // G5
+}
+
+// High-energy laser beam zap.
+export function sfxLaser(): void {
+  tone('sawtooth', 960, 120, 0.26, 0.16);
+  tone('square', 480, 80, 0.2, 0.1);
+  const a = audio();
+  if (!a || !master || !noiseBuffer) return;
+  const t = a.currentTime;
+  const src = a.createBufferSource();
+  src.buffer = noiseBuffer;
+  const filter = a.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.setValueAtTime(2400, t);
+  filter.frequency.exponentialRampToValueAtTime(300, t + 0.25);
+  const gain = a.createGain();
+  gain.gain.setValueAtTime(0.24, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+  src.connect(filter).connect(gain).connect(master);
+  src.start(t);
+  src.stop(t + 0.25);
+}
+
+// The nuke's roar and aftershocks last seconds, so they play through their
+// own gain "bus" instead of straight into master. stopNukeAudio() fades those
+// buses out, so going back to the title or starting a new match silences a
+// roar that is still rolling (nothing may carry over between matches).
+let nukeBuses: GainNode[] = [];
+
+function nukeBus(a: AudioContext): GainNode {
+  const bus = a.createGain();
+  bus.connect(master!);
+  nukeBuses.push(bus);
+  return bus;
+}
+
+export function stopNukeAudio(): void {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  for (const bus of nukeBuses) {
+    bus.gain.cancelScheduledValues(t);
+    bus.gain.setTargetAtTime(0, t, 0.03);  // ~0.1 s fade, no click
+  }
+  nukeBuses = [];
+}
+
+// Nuclear detonation audio: a sharp supersonic crack, then a massive
+// sub-bass roar swelling and rolling for ~4.5 s.
+export function sfxNuke(): void {
+  const a = audio();
+  if (!a || !master || !noiseBuffer) return;
+  const t = a.currentTime;
+  const bus = nukeBus(a);
+
+  // 1. Initial sharp acoustic crack (violent shock front snapping the air)
+  const crackOsc = a.createOscillator();
+  const crackGain = a.createGain();
+  crackOsc.type = 'sawtooth';
+  crackOsc.frequency.setValueAtTime(2400, t);
+  crackOsc.frequency.exponentialRampToValueAtTime(140, t + 0.08);
+  crackGain.gain.setValueAtTime(0.5, t);
+  crackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+  crackOsc.connect(crackGain).connect(master);
+  crackOsc.start(t);
+  crackOsc.stop(t + 0.09);
+
+  const crackNoise = a.createBufferSource();
+  crackNoise.buffer = noiseBuffer;
+  const crackFilter = a.createBiquadFilter();
+  crackFilter.type = 'bandpass';
+  crackFilter.frequency.setValueAtTime(3400, t);
+  crackFilter.frequency.exponentialRampToValueAtTime(700, t + 0.12);
+  crackFilter.Q.value = 1.4;
+  const crackNoiseGain = a.createGain();
+  crackNoiseGain.gain.setValueAtTime(0.65, t);
+  crackNoiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+  crackNoise.connect(crackFilter).connect(crackNoiseGain).connect(master);
+  crackNoise.start(t);
+  crackNoise.stop(t + 0.14);
+
+  // 2. Sub-bass roar swelling and rolling for ~4.5 s
+  const sub = a.createOscillator();
+  const subGain = a.createGain();
+  sub.type = 'sine';
+  sub.frequency.setValueAtTime(65, t);
+  sub.frequency.exponentialRampToValueAtTime(18, t + 4.5);
+  subGain.gain.setValueAtTime(0.05, t);
+  subGain.gain.linearRampToValueAtTime(0.8, t + 0.35); // swell
+  subGain.gain.exponentialRampToValueAtTime(0.001, t + 4.8);
+  sub.connect(subGain).connect(bus);
+  sub.start(t);
+  sub.stop(t + 4.8);
+
+  // Gritty triangle giving heavy texture to the low roar
+  const rumble = a.createOscillator();
+  const rumbleGain = a.createGain();
+  rumble.type = 'triangle';
+  rumble.frequency.setValueAtTime(46, t);
+  rumble.frequency.exponentialRampToValueAtTime(16, t + 3.8);
+  rumbleGain.gain.setValueAtTime(0.05, t);
+  rumbleGain.gain.linearRampToValueAtTime(0.45, t + 0.4);
+  rumbleGain.gain.exponentialRampToValueAtTime(0.001, t + 4.0);
+  rumble.connect(rumbleGain).connect(bus);
+  rumble.start(t);
+  rumble.stop(t + 4.0);
+
+  // 3. Heavy rolling thunder noise swelling and rolling for ~4.5 s
+  const roarNoise = a.createBufferSource();
+  roarNoise.buffer = noiseBuffer;
+  const roarFilter = a.createBiquadFilter();
+  roarFilter.type = 'lowpass';
+  roarFilter.frequency.setValueAtTime(450, t);
+  roarFilter.frequency.exponentialRampToValueAtTime(36, t + 4.5);
+  const roarGain = a.createGain();
+  roarGain.gain.setValueAtTime(0.1, t);
+  roarGain.gain.linearRampToValueAtTime(0.7, t + 0.45); // swell
+  roarGain.gain.exponentialRampToValueAtTime(0.001, t + 4.8);
+  roarNoise.connect(roarFilter).connect(roarGain).connect(bus);
+  roarNoise.start(t);
+  roarNoise.stop(t + 4.8);
+}
+
+// Delayed rumbling aftershock from distant atmospheric and terrain echoes.
+// Driven in game ticks from updateWeapons() so resets cancel it cleanly.
+export function sfxNukeAftershock(strength: number): void {
+  const a = audio();
+  if (!a || !master || !noiseBuffer) return;
+  const t = a.currentTime;
+  const bus = nukeBus(a);
+  const duration = 1.6 * strength;
+
+  // Deep low-frequency thud
+  const sub = a.createOscillator();
+  const subGain = a.createGain();
+  sub.type = 'sine';
+  sub.frequency.setValueAtTime(42, t);
+  sub.frequency.exponentialRampToValueAtTime(16, t + duration);
+  subGain.gain.setValueAtTime(0.45 * strength, t);
+  subGain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+  sub.connect(subGain).connect(bus);
+  sub.start(t);
+  sub.stop(t + duration);
+
+  // Rolling rumble noise
+  const noise = a.createBufferSource();
+  noise.buffer = noiseBuffer;
+  const filter = a.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(260, t);
+  filter.frequency.exponentialRampToValueAtTime(28, t + duration);
+  const gain = a.createGain();
+  gain.gain.setValueAtTime(0.45 * strength, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+  noise.connect(filter).connect(gain).connect(bus);
+  noise.start(t);
+  noise.stop(t + duration);
+}
+
+// Falling bomb whistle for airstrike drops.
+export function sfxWhistle(): void {
+  tone('sine', 1600, 480, 0.35, 0.12);
+}

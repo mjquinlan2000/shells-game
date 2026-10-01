@@ -24,6 +24,7 @@ export interface Tank {
   angle: number;          // degrees: 0 = pointing right, 90 = up, 180 = left
   power: number;          // 5..100
   hp: number;
+  armor: number;          // soaks damage before hp (0..MAX_ARMOR), from armor crates
   alive: boolean;
   fuel: number;           // pixels left to drive this turn
   weapon: number;         // index into WEAPONS
@@ -69,6 +70,7 @@ export function makeTank(index: number, x: number): Tank {
     angle: x < W / 2 ? 45 : 135,  // 0 = pointing right, 90 = up, 180 = left
     power: 55,
     hp: MAX_HP,
+    armor: 0,
     alive: true,
     fuel: MOVE_FUEL,
     weapon: 0,
@@ -107,8 +109,22 @@ export const groundSlope = (x: number, y: number) => Math.atan2(groundAt(x + 6, 
 
 export function hurt(t: Tank, amount: number) {
   if (!t.alive || amount <= 0) return;
-  t.hp = Math.max(0, t.hp - amount);
-  game.floaters.push({ x: t.x, y: t.y - 30, text: `-${amount}`, color: '#ff6b6b', life: 70, s: 1 });
+  const absorbed = Math.min(t.armor, amount);
+  t.armor -= absorbed;
+  const rest = amount - absorbed;
+  if (rest > 0) {
+    t.hp = Math.max(0, t.hp - rest);
+  }
+  // Floaters: armor loss in steel blue, HP loss in red. If both took damage,
+  // offset them vertically so neither text obscures the other.
+  if (absorbed > 0 && rest > 0) {
+    game.floaters.push({ x: t.x, y: t.y - 40, text: `-${absorbed}`, color: '#5ca0d3', life: 70, s: 1 });
+    game.floaters.push({ x: t.x, y: t.y - 28, text: `-${rest}`, color: '#ff6b6b', life: 70, s: 1 });
+  } else if (absorbed > 0) {
+    game.floaters.push({ x: t.x, y: t.y - 30, text: `-${absorbed}`, color: '#5ca0d3', life: 70, s: 1 });
+  } else if (rest > 0) {
+    game.floaters.push({ x: t.x, y: t.y - 30, text: `-${rest}`, color: '#ff6b6b', life: 70, s: 1 });
+  }
 }
 
 export function updateTank(t: Tank) {

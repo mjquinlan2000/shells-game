@@ -21,15 +21,15 @@ The game is TypeScript in `src/`, bundled by esbuild into `dist/game.js` (one cl
 |---|---|
 | `index.html` | Full-window `<canvas id="game">` and `<script src="dist/game.js">` |
 | `src/main.ts` | Entry point: fixed-timestep main loop, plus `export *` of every module for the console |
-| `src/config.ts` | Tuning constants, `WEAPONS`, player colours |
+| `src/config.ts` | Tuning constants, `WEAPONS` (with `kind`, crate `drop` weights), `MAX_ARMOR`, player colours |
 | `src/util/` | `math.ts` (`rand`, `clamp`, `Point`), `color.ts` (`packColor`, `mix`, `bayer` dithering) |
 | `src/gfx/` | `canvas.ts` (pixel + display canvases, `resize`), `draw.ts` (`fillCircle`, `fillRing`, `pixelLine`), `font.ts` (5×7 `FONT`, `drawText`) |
 | `src/audio.ts` | Web Audio synthesis: one-shots, looping engine/turret sounds, mute |
 | `src/input.ts` | Keyboard (`pressed`, `held`, `repeatKey`) and mouse drag (`takeDrag`) |
 | `src/world/` | `backdrop.ts` (sky, moon, parallax hills), `clouds.ts`, `background-war.ts` (`bg`), `terrain.ts` (materials, `terrain`, `solid`, settling), `obstacles.ts` |
-| `src/combat/` | `tanks.ts` (`Tank`, movement, sliding, falling), `death.ts` (dying sequence), `projectiles.ts` (`fire`), `effects.ts` (`explode`, particles, floaters) |
+| `src/combat/` | `tanks.ts` (`Tank`, movement, sliding, falling, armor in `hurt`), `death.ts` (dying sequence), `projectiles.ts` (`fire`, per-kind shells), `weapons.ts` (laser beam, airstrike bomber, nuke aftermath, sub-munitions), `crates.ts` (supply drops), `effects.ts` (`explode`, `explodeNuke`, particles, floaters) |
 | `src/game/` | `state.ts` (the shared `game` object), `flow.ts` (turns, `update()`, win checks), `camera.ts` |
-| `src/render/` | `render.ts` (`render()`, `camX`), `world.ts` (`composeFrame`, pixel-buffer drawing), `tank.ts`, `hud.ts` (HUD, title, banner), `minimap.ts`, `lights.ts` (`collectLights`, glow sprites) |
+| `src/render/` | `render.ts` (`render()`, `camX`), `world.ts` (`composeFrame`, pixel-buffer drawing), `tank.ts`, `crates.ts`, `weapons.ts` (beams, bomber, shockwaves), `hud.ts` (corner panels, weapon tray, roster, title, banner), `minimap.ts`, `lights.ts` (`collectLights`, glow sprites) |
 
 Each file owns one concern; put new code next to the system it belongs to rather than in `main.ts`. Interfaces live in the file that creates those objects (`Tank` in `tanks.ts`, `Particle` in `effects.ts`, `Light` in `lights.ts`, …).
 
@@ -68,8 +68,15 @@ Pixel-art rules: integer coordinates only; no anti-aliased canvas strokes, arcs 
 
 - Fixed timestep: `update()` runs at exactly 60 Hz from an accumulator in `loop()`; `render()` runs once per animation frame. All physics constants are per tick.
 - `game.hitstop` freezes the world simulation for a few ticks on big impacts; trauma and flash keep decaying during the freeze.
-- State machine: `title → aim → flying → resolving → aim (next player) … → gameover`. `updateResolving()` only advances when nothing can still change: its `busy` check covers projectiles, explosions, airborne `debris`, settling terrain, and falling / sliding / dying tanks. **Anything new that can alter terrain or move a tank must be added to that check**, or the next turn starts mid-motion.
+- State machine: `title → aim → flying → resolving → aim (next player) … → gameover`. `updateResolving()` only advances when nothing can still change: its `busy` check covers projectiles, explosions, airborne `debris`, settling terrain, `weaponsBusy()` (laser beam, pending airstrike), `cratesBusy()` (crates in free fall), and falling / sliding / dying tanks. **Anything new that can alter terrain or move a tank must be added to that check**, or the next turn starts mid-motion. Two deliberate exceptions: parachuting crates are gameplay entities (a tank can collect one at any time) but drift too slowly to wait for, so they carry across turns; the nuke's mushroom cloud, rings, tint and fallout are purely decorative. To give the nuke its moment, its `camera.impact.tick` is dated `NUKE_LINGER` ticks into the future, a fixed extra pause before the next turn.
 - After a shot, `camera.impact` holds the landing point; the next turn waits `IMPACT_LINGER` ticks after impact so the camera can rest there before panning to the next player.
+
+### Weapons and crates
+
+- `fire()` dispatches on `Weapon.kind`: `shell`, `cluster` (splits into bomblets at the top of its arc), `drill` (burrows, then explodes), `laser` (instant hitscan, 480 px, burns a channel), `airstrike` (marker, then a bomber drops 5 bombs), `nuke`. Sub-munitions (`BOMBLET_WEAPON`, `BOMB_WEAPON`) live in `weapons.ts`, not in `WEAPONS`, because `tank.ammo` parallels `WEAPONS`. Laser and drill tunnel with the `BORE` table (every `BLAST` stage at once, so boulders don't leave cracked plugs) and stop at indestructible material.
+- Weapons with `ammo: 0` only come from crates. `maybeDropCrate()` runs on each turn change (50%, at most 3 on the field); a crate parachutes down at a random x. A tank collects it by touching it (driving, falling, or being landed on), or by hitting it with a shell. Weapon crates pick by `drop` weight and add `pickup` shots; armor crates add `ARMOR_PICKUP` up to `MAX_ARMOR`. Armor absorbs damage before HP in `hurt()`.
+- HUD: no top bar. Player card bottom-left, weapon tray bottom-centre (only weapons with ammo), aim/wind panel bottom-right, minimap top-left, turn roster top-right. Keep the bottom ~50 px and top ~55 px in mind when placing world features near the screen edges.
+- Dev menu: `npm run dev` bundles with `DEV = true` (esbuild `--define`); during a match `/` opens a cheat menu to add any weapon, armor, or drop a crate next to the current player. `npm run build` sets `DEV = false`, so esbuild strips it. Guard dev-only code with `if (DEV)`.
 
 ### Terrain materials
 
@@ -103,7 +110,7 @@ Everything is synthesized with the Web Audio API; there are no audio files.
 
 ## Tuning
 
-Gameplay feel lives in `src/config.ts` (`GRAVITY`, `WIND_ACCEL`, `MAX_SPEED`, `MOVE_FUEL`, `WEAPONS`) plus a few named constants next to the systems they control: `MAX_SHAKE`, `MAX_TILT`, `DEATH_TICKS`, `MAX_SLOPE`, `SLIDE_SLOPE`, `IMPACT_LINGER`, parallax factors, and spawn intervals in `updateBackground()`. Durations are in ticks (60 = 1 second). Obstacle, cloud and buried-rock counts scale with `W / VW`.
+Gameplay feel lives in `src/config.ts` (`GRAVITY`, `WIND_ACCEL`, `MAX_SPEED`, `MOVE_FUEL`, `MAX_ARMOR`, `ARMOR_PICKUP`, `WEAPONS`) plus a few named constants next to the systems they control: `MAX_SHAKE`, `MAX_TILT`, `DEATH_TICKS`, `MAX_SLOPE`, `SLIDE_SLOPE`, `IMPACT_LINGER`, crate drop odds in `maybeDropCrate()`, parallax factors, and spawn intervals in `updateBackground()`. Durations are in ticks (60 = 1 second). Obstacle, cloud and buried-rock counts scale with `W / VW`.
 
 ## Verifying changes
 
@@ -131,3 +138,4 @@ Clean up servers and temp files afterwards.
 | M | Mute |
 | Esc | Back to title |
 | Enter | (Game over) back to title |
+| / | (Dev builds only) power-up cheat menu; Esc or / closes it |

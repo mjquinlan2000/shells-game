@@ -1,14 +1,15 @@
-import { H, HUD_H, VW, W, WHITE } from '../config';
+import { crates } from '../combat/crates';
+import { H, VW, W, WHITE } from '../config';
 import { game } from '../game/state';
 import { ctx } from '../gfx/canvas';
 import { drawPanel } from './hud';
 import { camX } from './render';
 import { SOLID, T_BASE, terrain } from '../world/terrain';
 
-// --- Minimap: the whole battlefield at 1/8 scale, under the HUD ---
+// --- Minimap: the whole battlefield at 1/8 scale, floating at top-left ---
 export const MINI_SCALE = 8;
 export const MINI_W = W / MINI_SCALE, MINI_H = H / MINI_SCALE;
-export const MINI_X = 6, MINI_Y = HUD_H + 5;  // top-left, clear of the moon
+export const MINI_X = 6, MINI_Y = 6;  // top-left corner
 export const miniCanvas = document.createElement('canvas');
 miniCanvas.width = MINI_W;
 miniCanvas.height = MINI_H;
@@ -48,6 +49,13 @@ export function drawMinimap() {
     if (t === game.tanks[game.current] && game.state === 'aim' && game.ticks % 30 < 10) continue;  // blink
     ctx.fillStyle = t.color.body;
     ctx.fillRect(MINI_X + Math.floor(t.x / MINI_SCALE) - 1, MINI_Y + Math.floor(t.y / MINI_SCALE) - 1, 3, 2);
+  }
+  // Crates blink as bright yellow dots.
+  if (game.ticks % 20 < 14) {
+    ctx.fillStyle = '#ffd23b';
+    for (const c of crates) {
+      ctx.fillRect(MINI_X + Math.floor(c.x / MINI_SCALE) - 1, MINI_Y + Math.floor(c.y / MINI_SCALE) - 1, 2, 2);
+    }
   }
   ctx.fillStyle = '#ffe08a';
   for (const p of game.projectiles) {

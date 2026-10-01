@@ -1,5 +1,5 @@
 import { sfxDistantBoom } from '../audio';
-import { H, HUD_H, VW, W } from '../config';
+import { H, VW, W } from '../config';
 import { camera } from '../game/camera';
 import { game } from '../game/state';
 import { framePixels } from '../gfx/canvas';
@@ -112,7 +112,7 @@ export function resetBackground() {
 export function spawnJets() {
   const dir = Math.random() < 0.5 ? 1 : -1;
   const count = Math.random() < 0.35 ? randInt(2, 3) : 1;  // sometimes a formation
-  const y = randInt(HUD_H + 16, 110), speed = rand(2.2, 3.4);
+  const y = randInt(33, 110), speed = rand(2.2, 3.4);
   const startX = dir > 0 ? -20 : spaceWidth(JET_F) + 20;
   for (let k = 0; k < count; k++) {
     bg.jets.push({ x: startX - dir * k * 16, y: y + k * 5, vx: dir * speed, dir, trail: [], age: 0 });

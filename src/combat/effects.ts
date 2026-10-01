@@ -1,5 +1,6 @@
-import { sfxBoom, sfxTankHit } from '../audio';
+import { sfxBoom, sfxNuke, sfxTankHit } from '../audio';
 import { hurt, type Tank } from './tanks';
+import { triggerNukeDetonation } from './weapons';
 import { H, W } from '../config';
 import { game } from '../game/state';
 import { packColor } from '../util/color';
@@ -175,6 +176,27 @@ export function explode(x: number, y: number, radius: number, damage: number, st
   game.hitstop = Math.max(game.hitstop, Math.round(radius / 7));
   game.flash = Math.max(game.flash, radius / 70);
   sfxBoom(radius);
+}
+
+// Nuclear detonation: standard crater & damage, plus blinding screen flash,
+// sustained trauma rumble, longer hitstop (~20), 3 staggered shockwaves,
+// massive churning mushroom cloud, fallout, and deep rolling audio.
+export function explodeNuke(x: number, y: number, radius: number, damage: number, struck: Tank | null = null): void {
+  explode(x, y, radius, damage, struck);
+
+  // High-impact extras
+  game.flash = 1;
+  game.trauma = 1;
+  game.hitstop = Math.max(game.hitstop, 20);
+
+  // Mushroom cloud, 3 staggered shockwaves, screen tint, rumble, aftershocks
+  triggerNukeDetonation(x, y);
+
+  // Upward fiery sparks inside the rising detonation column (< 30 new particles)
+  for (let i = 0; i < 24; i++) {
+    game.particles.push(spark(x + rand(-8, 8), y - rand(2, 10), rand(-1.5, 1.5), -rand(2.5, 5.5)));
+  }
+  sfxNuke();
 }
 
 export function updateParticle(p: Particle) {

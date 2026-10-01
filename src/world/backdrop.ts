@@ -1,4 +1,4 @@
-import { H, HUD_H, VW, W } from '../config';
+import { H, VW, W } from '../config';
 import { bayer, packColor } from '../util/color';
 import { clamp, rand, randInt } from '../util/math';
 
@@ -54,7 +54,7 @@ export function buildBackdrop() {
   // Stars: most static, some twinkle (animated in composeFrame).
   twinkles = [];
   for (let n = 0; n < 260; n++) {
-    const x = randInt(0, VW - 1), y = randInt(HUD_H + 2, Math.floor(H * 0.5));
+    const x = randInt(0, VW - 1), y = randInt(19, Math.floor(H * 0.5));
     const i = y * VW + x;
     if (Math.random() < 0.12) {
       twinkles.push({ i, phase: rand(0, 6.28), speed: rand(0.03, 0.09) });
