@@ -6,19 +6,43 @@ The owner is new to game development. Keep code readable and commented for a lea
 
 ## Running
 
-No build step, no dependencies, no package manager.
+The game is TypeScript in `src/`, bundled by esbuild into `dist/game.js` (one classic script, so `index.html` still works from `file://`). `tsc` only type-checks; it never emits.
 
-- Open `index.html` directly in a browser, or
-- `python3 -m http.server 8000` and open http://localhost:8000
+- `npm install` once.
+- `npm run dev` — serves the folder at http://localhost:8000 and rebuilds on every save (refresh the page to see changes).
+- `npm run build` — writes `dist/game.js`; then `index.html` can be opened directly.
+- `npm run typecheck` — `tsc` in strict mode. Run it before calling a change done; esbuild strips types without checking them.
+
+`dist/` and `node_modules/` are git-ignored.
 
 ## Files
 
-| File | Contents |
+| Path | Contents |
 |---|---|
-| `index.html` | Full-window `<canvas id="game">` and a classic `<script src="game.js">` |
-| `game.js` | The entire game, split into numbered sections (see the header comment) |
+| `index.html` | Full-window `<canvas id="game">` and `<script src="dist/game.js">` |
+| `src/main.ts` | Entry point: fixed-timestep main loop, plus `export *` of every module for the console |
+| `src/config.ts` | Tuning constants, `WEAPONS`, player colours |
+| `src/util/` | `math.ts` (`rand`, `clamp`, `Point`), `color.ts` (`packColor`, `mix`, `bayer` dithering) |
+| `src/gfx/` | `canvas.ts` (pixel + display canvases, `resize`), `draw.ts` (`fillCircle`, `fillRing`, `pixelLine`), `font.ts` (5×7 `FONT`, `drawText`) |
+| `src/audio.ts` | Web Audio synthesis: one-shots, looping engine/turret sounds, mute |
+| `src/input.ts` | Keyboard (`pressed`, `held`, `repeatKey`) and mouse drag (`takeDrag`) |
+| `src/world/` | `backdrop.ts` (sky, moon, parallax hills), `clouds.ts`, `background-war.ts` (`bg`), `terrain.ts` (materials, `terrain`, `solid`, settling), `obstacles.ts` |
+| `src/combat/` | `tanks.ts` (`Tank`, movement, sliding, falling), `death.ts` (dying sequence), `projectiles.ts` (`fire`), `effects.ts` (`explode`, particles, floaters) |
+| `src/game/` | `state.ts` (the shared `game` object), `flow.ts` (turns, `update()`, win checks), `camera.ts` |
+| `src/render/` | `render.ts` (`render()`, `camX`), `world.ts` (`composeFrame`, pixel-buffer drawing), `tank.ts`, `hud.ts` (HUD, title, banner), `minimap.ts`, `lights.ts` (`collectLights`, glow sprites) |
 
-`game.js` is a single classic script on purpose: it works from `file://` (ES modules would not) and every top-level function and variable is reachable from the browser console, which the test workflow below relies on. Keep it one file; find your way around with the `// ===== N.` section banners and `// ---` subsection banners.
+Each file owns one concern; put new code next to the system it belongs to rather than in `main.ts`. Interfaces live in the file that creates those objects (`Tank` in `tanks.ts`, `Particle` in `effects.ts`, `Light` in `lights.ts`, …).
+
+### Shared state
+
+An ES module may export a `let`, and importers always see its current value, but only the declaring file may assign it. So:
+
+- Match state that several files reassign lives on the `game` object in `src/game/state.ts` (`game.state`, `game.tanks`, `game.current`, `game.wind`, `game.ticks`, `game.banner`, `game.projectiles`, `game.particles`, `game.explosions`, `game.floaters`, `game.trauma`, `game.hitstop`, `game.flash`).
+- State owned by one system stays a module-level `let` and is changed through that module's functions (`toggleMute()`, `takeDrag()`, `markDirty()`, `buildClouds()`, …).
+
+### Import cycles
+
+Modules import each other freely (e.g. tanks ↔ effects); that's fine because cross-module calls happen at run time, not while modules load. Top-level code that runs at load (`packColor(...)` tables, `makeLayer`, `addEventListener`) may only use modules that don't import it back.
 
 ## Architecture
 
@@ -43,7 +67,7 @@ Pixel-art rules: integer coordinates only; no anti-aliased canvas strokes, arcs 
 ### Simulation
 
 - Fixed timestep: `update()` runs at exactly 60 Hz from an accumulator in `loop()`; `render()` runs once per animation frame. All physics constants are per tick.
-- `hitstop` freezes the world simulation for a few ticks on big impacts; trauma and flash keep decaying during the freeze.
+- `game.hitstop` freezes the world simulation for a few ticks on big impacts; trauma and flash keep decaying during the freeze.
 - State machine: `title → aim → flying → resolving → aim (next player) … → gameover`. `updateResolving()` only advances when nothing can still change: its `busy` check covers projectiles, explosions, airborne `debris`, settling terrain, and falling / sliding / dying tanks. **Anything new that can alter terrain or move a tank must be added to that check**, or the next turn starts mid-motion.
 - After a shot, `camera.impact` holds the landing point; the next turn waits `IMPACT_LINGER` ticks after impact so the camera can rest there before panning to the next player.
 
@@ -79,17 +103,17 @@ Everything is synthesized with the Web Audio API; there are no audio files.
 
 ## Tuning
 
-Gameplay feel lives in section 1 (`GRAVITY`, `WIND_ACCEL`, `MAX_SPEED`, `MOVE_FUEL`, `WEAPONS`) plus a few named constants next to the systems they control: `MAX_SHAKE`, `MAX_TILT`, `DEATH_TICKS`, `MAX_SLOPE`, `SLIDE_SLOPE`, `IMPACT_LINGER`, parallax factors, and spawn intervals in `updateBackground()`. Durations are in ticks (60 = 1 second). Obstacle, cloud and buried-rock counts scale with `W / VW`.
+Gameplay feel lives in `src/config.ts` (`GRAVITY`, `WIND_ACCEL`, `MAX_SPEED`, `MOVE_FUEL`, `WEAPONS`) plus a few named constants next to the systems they control: `MAX_SHAKE`, `MAX_TILT`, `DEATH_TICKS`, `MAX_SLOPE`, `SLIDE_SLOPE`, `IMPACT_LINGER`, parallax factors, and spawn intervals in `updateBackground()`. Durations are in ticks (60 = 1 second). Obstacle, cloud and buried-rock counts scale with `W / VW`.
 
 ## Verifying changes
 
-There is no test suite; verify by running the game. The established workflow, using a headless browser:
+There is no test suite; verify with `npm run typecheck` plus running the game. The established workflow, using a headless browser:
 
-1. Serve the folder (`python3 -m http.server 8137`) and open it in a dedicated headless Chromium, **not** the user's own browser.
-2. Headless tabs throttle `requestAnimationFrame`, so wall-clock waits don't advance the game. Stop the real loop with `window.requestAnimationFrame = () => 0`, then drive it deterministically from page JS: call `update()` N times and `render()` once before each screenshot.
-3. Stage scenarios directly through globals (`startGame(n)`, `fire(tank)`, `explode(x, y, r, dmg)`, `fillColumn(x, top)`, `bg.*`), assert on state (`state`, `tanks`, `camera.x`, `terrain` counts), and check `tab.errors()` is empty.
-4. For pixel-level checks, crop `pix` into a scaled canvas with smoothing off and inspect that image.
-5. Audio can't be heard in headless runs; at least exercise the code path (`muted = false`, call the sfx function) to catch exceptions, and say that the sound itself was not verified.
+1. `npm run build`, serve the folder (`python3 -m http.server 8137`) and open it in a dedicated headless Chromium, **not** the user's own browser.
+2. Headless tabs throttle `requestAnimationFrame`, so wall-clock waits don't advance the game. Stop the real loop with `window.requestAnimationFrame = () => 0`, then drive it deterministically from page JS: call `SHELLS.update()` N times and `SHELLS.render()` once before each screenshot.
+3. Everything exported is on `window.SHELLS`. Stage scenarios through it (`startGame(n)`, `fire(tank)`, `explode(x, y, r, dmg)`, `fillColumn(x, top)`, `bg.*`, `game.*`), assert on state (`game.state`, `game.tanks`, `camera.x`, `terrain` counts), and check `tab.errors()` is empty. Exported `let`s (e.g. `SHELLS.muted`, `SHELLS.camX`) are read-only from outside; change them through their module's functions.
+4. For pixel-level checks, crop `SHELLS.pix` into a scaled canvas with smoothing off and inspect that image.
+5. Audio can't be heard in headless runs; at least exercise the code path (unmuted, call the sfx function) to catch exceptions, and say that the sound itself was not verified.
 
 Clean up servers and temp files afterwards.
 

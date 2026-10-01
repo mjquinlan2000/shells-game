@@ -6,12 +6,13 @@
   <title>SHELLS</title>
   <style>
     html, body { margin: 0; height: 100%; background: #05050f; overflow: hidden; }
-    /* game.js sizes this canvas to the window and scales the pixel art itself. */
+    /* The game sizes this canvas to the window and scales the pixel art itself. */
     canvas { display: block; }
   </style>
 </head>
 <body>
   <canvas id="game"></canvas>
-  <script src="game.js"></script>
+  <!-- Built from src/ by `npm run build` (or served live by `npm run dev`). -->
+  <script src="dist/game.js"></script>
 </body>
 </html>

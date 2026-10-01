@@ -1,0 +1,15 @@
+{
+  "name": "shells",
+  "private": true,
+  "description": "SHELLS: a turn-based pixel-art artillery game for the browser",
+  "type": "module",
+  "scripts": {
+    "dev": "esbuild src/main.ts --bundle --format=iife --global-name=SHELLS --sourcemap --outfile=dist/game.js --servedir=. --serve=127.0.0.1:8000 --watch",
+    "build": "esbuild src/main.ts --bundle --format=iife --global-name=SHELLS --sourcemap --outfile=dist/game.js",
+    "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}
