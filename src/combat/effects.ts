@@ -1,4 +1,5 @@
 import { sfxBoom, sfxNuke, sfxTankHit } from '../audio';
+import { collectCratesInBlast } from './crates';
 import { hurt, type Tank } from './tanks';
 import { triggerNukeDetonation } from './weapons';
 import { H, W } from '../config';
@@ -147,6 +148,10 @@ export function explode(x: number, y: number, radius: number, damage: number, st
   }
   // Metal clang only for a direct hit; splash damage just gets the boom.
   if (struckDamage > 0) sfxTankHit(Math.min(1, struckDamage / 55));
+
+  // Any supply crate caught in the blast goes to the shooter. This runs after
+  // the damage step so a shooter killed by their own blast doesn't collect.
+  collectCratesInBlast(x, y, radius);
 
   // 3. Fire, sparks, smoke and dust.
   game.explosions.push({ x, y, radius, age: 0, life: 28 });

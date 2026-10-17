@@ -70,6 +70,30 @@ export function crateAt(x: number, y: number): Crate | null {
   return null;
 }
 
+// An explosion opens every crate it touches and hands it to the player whose
+// turn it is. Every blast during a turn comes from that player's shot (or a
+// chain reaction it caused, like a tank it destroyed blowing up), so they
+// earned it. Without this, players had to land a shell exactly on the crate.
+//
+// "Touches" means the blast circle, plus the scorched rim (`radius + 4`, the
+// same rim explode() chars), overlaps the crate's ~9x8 box. To test a circle
+// against a box, find the point of the box closest to the circle's centre and
+// check whether that point is inside the circle.
+export function collectCratesInBlast(x: number, y: number, radius: number): void {
+  const shooter = game.tanks[game.current];
+  // A shooter who blew themselves up can't use the loot; leave it for others.
+  // (A tank at 0 HP is still `alive` until its dying sequence plays out.)
+  if (!shooter || !shooter.alive || shooter.hp <= 0) return;
+  const reach = radius + 4;
+  // Walk backwards: collectCrate() removes crates from the array as we go.
+  for (let i = crates.length - 1; i >= 0; i--) {
+    const c = crates[i];
+    const nx = clamp(x, c.x - 4, c.x + 4);
+    const ny = clamp(y, c.y - 8, c.y);
+    if ((nx - x) ** 2 + (ny - y) ** 2 <= reach * reach) collectCrate(c, shooter);
+  }
+}
+
 // Ground check for a crate: tests beneath its bottom-centre and edges.
 function isCrateGrounded(c: Crate): boolean {
   if (c.y >= H - 1) return true;

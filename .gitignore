@@ -1,2 +1,4 @@
 node_modules/
 dist/
+# Yarn Plug'n'Play files; this project uses npm
+.pnp.*
