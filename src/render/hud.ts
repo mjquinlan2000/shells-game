@@ -11,6 +11,7 @@ import {
   type Weapon,
 } from '../config';
 import type { Tank } from '../combat/tanks';
+import { getArenaChoiceInfo } from '../game/flow';
 import { game } from '../game/state';
 import { ctx } from '../gfx/canvas';
 import { pixelLine } from '../gfx/draw';
@@ -414,10 +415,17 @@ export const TITLE_GRADIENT = ['#fff09a', '#ffd23b', '#ffb02e', '#ff8a24', '#ff6
 
 export function drawTitle() {
   drawCentered('SHELLS', 42, TITLE_GRADIENT, 7, '#2a0f2a');
-  drawCentered('TURN-BASED ARTILLERY', 104, '#e6e0ff', 2);
-  if (Math.floor(game.ticks / 30) % 2 === 0) drawCentered('PRESS 2, 3 OR 4 TO START', 136, '#ffd23b', 2);
+  drawCentered('TURN-BASED ARTILLERY', 100, '#e6e0ff', 2);
+
+  // Battlefield picker: the scenery behind the title previews the choice.
+  const arena = getArenaChoiceInfo();
+  drawCentered(`< ${arena.name} >`, 120, '#8fd3ff', 2);
+  drawCentered(`${arena.counter} - ${arena.tagline}`, 139, '#e6e0ff', 1);
+
+  if (Math.floor(game.ticks / 30) % 2 === 0) drawCentered('PRESS 2, 3 OR 4 TO START', 156, '#ffd23b', 2);
 
   const controls = [
+    ['< > TITLE', 'BATTLEFIELD'],
     ['LEFT/RIGHT', 'AIM'],
     ['UP/DOWN', 'POWER'],
     ['A/D', 'DRIVE'],
@@ -430,19 +438,19 @@ export function drawTitle() {
   // builds compile this out, so their title screen is unchanged.
   if (DEV) controls.push(['/', 'DEV POWER-UPS']);
   // The panel grows by one row height per extra control.
-  const extra = (controls.length - 7) * 14;
-  drawPanel(190, 168, 260, 144 + extra);
+  const extra = (controls.length - 8) * 14;
+  drawPanel(190, 180, 260, 158 + extra);
   controls.forEach(([key, action], i) => {
-    drawText(key, 206, 178 + i * 14, '#8fd3ff');
-    drawText(action, 314, 178 + i * 14, WHITE);
+    drawText(key, 206, 190 + i * 14, '#8fd3ff');
+    drawText(action, 314, 190 + i * 14, WHITE);
   });
 
   // Divider line
   ctx.fillStyle = '#3d2f6e';
-  ctx.fillRect(202, 280 + extra, 236, 1);
+  ctx.fillRect(202, 306 + extra, 236, 1);
 
   // Short line explaining crates
-  drawCentered('GRAB CRATES: DRIVE INTO OR SHOOT THEM', 288 + extra, '#ffd23b', 1);
+  drawCentered('GRAB CRATES: DRIVE INTO OR SHOOT THEM', 314 + extra, '#ffd23b', 1);
 }
 
 export function drawBanner() {

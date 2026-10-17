@@ -24,12 +24,13 @@
 
 import { TICK_MS } from './config';
 import { newScenery, update } from './game/flow';
+import { ARENAS } from './world/arenas';
 import { render } from './render/render';
 
 // Fixed timestep: physics always advances in 1/60 s steps no matter the
 // monitor's refresh rate, so shots fly the same on every machine.
 
-newScenery();
+newScenery(ARENAS[0]);
 
 let lastTime = performance.now();
 let accumulator = 0;
@@ -76,6 +77,7 @@ export * from './render/weapons';
 export * from './render/world';
 export * from './util/color';
 export * from './util/math';
+export * from './world/arenas';
 export * from './world/backdrop';
 export * from './world/background-war';
 export * from './world/clouds';

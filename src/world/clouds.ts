@@ -2,6 +2,7 @@ import { VW, W } from '../config';
 import { game } from '../game/state';
 import { bayer, mix, packColor } from '../util/color';
 import { rand, randInt } from '../util/math';
+import type { Arena } from './arenas';
 
 // --- Clouds: small pixel sprites that drift with the wind ---
 // They live in their own parallax space, between the hills and the ground.
@@ -20,13 +21,13 @@ export interface Cloud {
 
 export let clouds: Cloud[] = [];
 
-export function makeCloud(depth: number) {
+export function makeCloud(depth: number, arena: Arena) {
   const w = randInt(50, 96), h = randInt(14, 24);
   const blobs = Array.from({ length: randInt(4, 7) }, () => ({
     x: rand(h * 0.5, w - h * 0.5), y: rand(h * 0.5, h * 0.7), r: rand(h * 0.3, h * 0.5),
   }));
-  // Nearer clouds are brighter; all are lit from above by the moon.
-  const tones = ['#6b5a9a', '#4b3f7a', '#352c5e'].map(c => packColor(mix(c, '#141a3a', 1 - depth)));
+  // Nearer clouds are brighter; all are lit from above by the sky body.
+  const tones = arena.clouds.tones.map(c => packColor(mix(c, arena.sky[1], 1 - depth)));
   const data = new Uint32Array(w * h);
   for (let y = 0; y < h - 1; y++) {
     for (let x = 0; x < w; x++) {
@@ -39,10 +40,12 @@ export function makeCloud(depth: number) {
   return { w, h, data };
 }
 
-export function buildClouds() {
-  clouds = Array.from({ length: Math.round(7 * CLOUD_SPACE / VW) }, (): Cloud => {
+export function buildClouds(arena: Arena) {
+  const baseCount = Math.round(7 * CLOUD_SPACE / VW);
+  const count = Math.round(baseCount * arena.clouds.amount);
+  clouds = Array.from({ length: count }, (): Cloud => {
     const depth = rand(0.4, 1);
-    const c = makeCloud(depth);
+    const c = makeCloud(depth, arena);
     return { ...c, depth, x: rand(-c.w, CLOUD_SPACE), y: randInt(26, 120) };
   });
 }

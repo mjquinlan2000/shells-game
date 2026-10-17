@@ -110,6 +110,7 @@ export function resetBackground() {
 }
 
 export function spawnJets() {
+  if (!game.arena.war) return;
   const dir = Math.random() < 0.5 ? 1 : -1;
   const count = Math.random() < 0.35 ? randInt(2, 3) : 1;  // sometimes a formation
   const y = randInt(33, 110), speed = rand(2.2, 3.4);
@@ -120,6 +121,7 @@ export function spawnJets() {
 }
 
 export function spawnRockets() {
+  if (!game.arena.war) return;
   const salvo = Math.random() < 0.45 ? randInt(2, 4) : 1;
   const x = randInt(20, farHills.w - 21), lean = rand(-1, 1);
   for (let k = 0; k < salvo; k++) {
@@ -132,6 +134,7 @@ export function spawnRockets() {
 }
 
 export function spawnBoom(x: number, y: number, f: number, r: number, ground: boolean) {
+  if (!game.arena.war) return;
   bg.booms.push({ x, y, f, r, age: 0, life: 30 });
   // A rising column of smoke for ground hits, a few dark puffs for air bursts.
   for (let k = 0; k < (ground ? randInt(6, 10) : randInt(3, 4)); k++) {
@@ -147,20 +150,21 @@ export function spawnBoom(x: number, y: number, f: number, r: number, ground: bo
 }
 
 export function updateBackground() {
-  if (--bg.nextJet <= 0) {
-    spawnJets();
-    bg.nextJet = randInt(240, 600);
+  if (game.arena.war) {
+    if (--bg.nextJet <= 0) {
+      spawnJets();
+      bg.nextJet = randInt(240, 600);
+    }
+    if (--bg.nextRocket <= 0) {
+      spawnRockets();
+      bg.nextRocket = randInt(300, 700);
+    }
+    if (--bg.nextBoom <= 0) {
+      const x = randInt(10, farHills.w - 11);
+      spawnBoom(x, farRidge[x], FAR_F, rand(6, 12), true);
+      bg.nextBoom = randInt(150, 420);
+    }
   }
-  if (--bg.nextRocket <= 0) {
-    spawnRockets();
-    bg.nextRocket = randInt(300, 700);
-  }
-  if (--bg.nextBoom <= 0) {
-    const x = randInt(10, farHills.w - 11);
-    spawnBoom(x, farRidge[x], FAR_F, rand(6, 12), true);
-    bg.nextBoom = randInt(150, 420);
-  }
-
   for (const j of bg.jets) {
     j.x += j.vx;
     j.age++;
