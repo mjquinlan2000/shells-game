@@ -11,27 +11,55 @@ import { IMPACT_LINGER, LOOK_RESET_KEYS, camera, updateCamera } from './camera';
 import { game } from './state';
 import { endInputTick, held, pressed, repeatKey, takeDrag } from '../input';
 import { clamp, rand, randInt } from '../util/math';
+import { ARENAS, type Arena } from '../world/arenas';
 import { buildBackdrop } from '../world/backdrop';
 import { resetBackground, updateBackground } from '../world/background-war';
 import { buildClouds, updateClouds } from '../world/clouds';
 import { placeObstacles } from '../world/obstacles';
 import { generateTerrain, settleTerrain, surfaceY, terrainSettling } from '../world/terrain';
 
+// Title battlefield selection: index 0..ARENAS.length-1 for a specific arena,
+// or ARENAS.length for RANDOM (picks a fresh random battlefield at match start).
+export let arenaChoice = 0;
+
+export function previewArena(): Arena {
+  return arenaChoice === ARENAS.length
+    ? ARENAS[randInt(0, ARENAS.length - 1)]
+    : ARENAS[arenaChoice];
+}
+
+export function getArenaChoiceInfo() {
+  if (arenaChoice === ARENAS.length) {
+    return {
+      name: 'RANDOM',
+      tagline: 'SURPRISE BATTLEFIELD EACH MATCH',
+      counter: '?/12',
+    };
+  }
+  const arena = ARENAS[arenaChoice];
+  return {
+    name: arena.name,
+    tagline: arena.tagline,
+    counter: `${arenaChoice + 1}/${ARENAS.length}`,
+  };
+}
+
 // --- Game flow ---
 // States: title -> aim -> flying -> resolving -> aim (next player) ... -> gameover
 
 // New sky, terrain and obstacles. Returns tank start positions (none on the
 // title screen), which obstacles are kept away from.
-export function newScenery(players = 0) {
-  buildBackdrop();
-  buildClouds();
-  generateTerrain();
+export function newScenery(arena: Arena, players = 0) {
+  game.arena = arena;
+  buildBackdrop(arena);
+  buildClouds(arena);
+  generateTerrain(arena);
   resetBackground();
   const xs: number[] = [];
   for (let i = 0; i < players; i++) {
     xs.push(findSpawnX(Math.round(clamp(W * (i + 0.5) / players + rand(-30, 30), 24, W - 25))));
   }
-  placeObstacles(xs);
+  placeObstacles(xs, arena);
   return xs.sort(() => Math.random() - 0.5);  // shuffle who stands where
 }
 
@@ -52,7 +80,10 @@ export function resetEffects() {
 
 export function startGame(players: number) {
   if (DEV) closeDevMenu();
-  const xs = newScenery(players);
+  const arena = arenaChoice === ARENAS.length
+    ? ARENAS[randInt(0, ARENAS.length - 1)]
+    : ARENAS[arenaChoice];
+  const xs = newScenery(arena, players);
   resetEffects();
   game.tanks = xs.map((x, i) => {
     const t = makeTank(i, x);
@@ -61,7 +92,7 @@ export function startGame(players: number) {
     return t;
   });
 
-  game.wind = randInt(-6, 6);
+  game.wind = game.arena.wind === 0 ? 0 : randInt(-game.arena.wind, game.arena.wind);
   game.current = randInt(0, players - 1);
   camera.x = clamp(game.tanks[game.current].x - VW / 2, 0, W - VW);
   beginTurn();
@@ -80,7 +111,7 @@ export function beginTurn() {
 
 export function nextTurn() {
   do game.current = (game.current + 1) % game.tanks.length; while (!game.tanks[game.current].alive);
-  game.wind = clamp(game.wind + randInt(-3, 3), -10, 10);
+  game.wind = game.arena.wind === 0 ? 0 : clamp(game.wind + randInt(-3, 3), -game.arena.wind, game.arena.wind);
   maybeDropCrate();  // sometimes a supply crate parachutes in
   beginTurn();
 }
@@ -189,11 +220,21 @@ export function update() {
   game.flash = Math.max(0, game.flash - 0.08);
 
   switch (game.state) {
-    case 'title':
+    case 'title': {
+      let cycle = 0;
+      if (pressed.has('ArrowLeft')) cycle--;
+      if (pressed.has('ArrowRight')) cycle++;
+      if (cycle !== 0) {
+        const total = ARENAS.length + 1;
+        arenaChoice = (arenaChoice + cycle + total) % total;
+        sfxBlip();
+        newScenery(previewArena());
+      }
       for (const n of [2, 3, 4]) {
         if (pressed.has(`Digit${n}`) || pressed.has(`Numpad${n}`)) startGame(n);
       }
       break;
+    }
     case 'aim':
       if (DEV && updateDevMenu()) {
         // Cheat menu is open: world simulates, but tank controls are suppressed.
@@ -242,5 +283,5 @@ export function goToTitle() {
   if (DEV) closeDevMenu();
   game.tanks = [];
   resetEffects();
-  newScenery();
+  newScenery(previewArena());
 }
