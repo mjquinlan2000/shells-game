@@ -26,7 +26,7 @@ The game is TypeScript in `src/`, bundled by esbuild into `dist/game.js` (one cl
 | `src/gfx/` | `canvas.ts` (pixel + display canvases, `resize`), `draw.ts` (`fillCircle`, `fillRing`, `pixelLine`), `font.ts` (5×7 `FONT`, `drawText`) |
 | `src/audio.ts` | Web Audio synthesis: one-shots, looping engine/turret sounds, mute |
 | `src/input.ts` | Keyboard (`pressed`, `held`, `repeatKey`) and mouse drag (`takeDrag`) |
-| `src/world/` | `backdrop.ts` (sky, moon, parallax hills), `clouds.ts`, `background-war.ts` (`bg`), `terrain.ts` (materials, `terrain`, `solid`, settling), `obstacles.ts` |
+| `src/world/` | `arenas.ts` (`ARENAS`, `Arena`), `backdrop.ts` (sky, moon, parallax hills), `clouds.ts`, `background-war.ts` (`bg`), `terrain.ts` (materials, `terrain`, `solid`, settling), `obstacles.ts` |
 | `src/combat/` | `tanks.ts` (`Tank`, movement, sliding, falling, armor in `hurt`), `death.ts` (dying sequence), `projectiles.ts` (`fire`, per-kind shells), `weapons.ts` (laser beam, airstrike bomber, nuke aftermath, sub-munitions), `crates.ts` (supply drops), `effects.ts` (`explode`, `explodeNuke`, particles, floaters) |
 | `src/game/` | `state.ts` (the shared `game` object), `flow.ts` (turns, `update()`, win checks), `camera.ts` |
 | `src/render/` | `render.ts` (`render()`, `camX`), `world.ts` (`composeFrame`, pixel-buffer drawing), `tank.ts`, `crates.ts`, `weapons.ts` (beams, bomber, shockwaves), `hud.ts` (corner panels, weapon tray, roster, title, banner), `minimap.ts`, `lights.ts` (`collectLights`, glow sprites) |
@@ -37,7 +37,7 @@ Each file owns one concern; put new code next to the system it belongs to rather
 
 An ES module may export a `let`, and importers always see its current value, but only the declaring file may assign it. So:
 
-- Match state that several files reassign lives on the `game` object in `src/game/state.ts` (`game.state`, `game.tanks`, `game.current`, `game.wind`, `game.ticks`, `game.banner`, `game.projectiles`, `game.particles`, `game.explosions`, `game.floaters`, `game.trauma`, `game.hitstop`, `game.flash`).
+- Match state that several files reassign lives on the `game` object in `src/game/state.ts` (`game.state`, `game.arena`, `game.tanks`, `game.current`, `game.wind`, `game.ticks`, `game.banner`, `game.projectiles`, `game.particles`, `game.explosions`, `game.floaters`, `game.trauma`, `game.hitstop`, `game.flash`).
 - State owned by one system stays a module-level `let` and is changed through that module's functions (`toggleMute()`, `takeDrag()`, `markDirty()`, `buildClouds()`, …).
 
 ### Import cycles
@@ -90,6 +90,18 @@ Pixel-art rules: integer coordinates only; no anti-aliased canvas strokes, arcs 
 
 Behaviour is read from the flat lookup tables (`SOLID`, `LOOSE`, `BLAST`, `RUBBLE`, `SCORCHABLE`, `T_BASE/T_LIGHT/T_DARK`). Add new ground types by adding a row, not by special-casing indices in physics code. Always test solidity with `solid(x, y)` / `SOLID[v]`, never `terrain[i] !== 0`.
 
+### Arenas
+
+Battlefields are pure data defined in `src/world/arenas.ts` (`ARENAS: Arena[]`). Each scenery system reads the part of the active arena it owns:
+- `terrain.ts` — `ground` and `palette` (materials are generated per arena from `palette`)
+- `obstacles.ts` — `obstacles` counts and `palette` (for floating islands)
+- `backdrop.ts` — `sky`, `stars`, `starColors`, `body`, `farHills`, `nearHills`
+- `clouds.ts` — `clouds`
+- `lights.ts` — `body` (its glow)
+- `flow.ts` — `wind` range; `background-war.ts` — `war`
+
+`newScenery(arena, players)` sets `game.arena = arena` before calling the builders. Wind is rolled in `-arena.wind..arena.wind` each match (0 for calm worlds like Lunar Wastes). Add a new battlefield simply by adding an entry to `ARENAS` (plus a new `GroundShape`, `FarShape`, or `NearProps` implementation only if needed).
+
 ### Invariants
 
 - **Mass conservation:** each debris clod removed one pixel and deposits exactly one pixel when it lands. Explosions may only dig; never let landing debris add more terrain than was removed.
@@ -110,7 +122,7 @@ Everything is synthesized with the Web Audio API; there are no audio files.
 
 ## Tuning
 
-Gameplay feel lives in `src/config.ts` (`GRAVITY`, `WIND_ACCEL`, `MAX_SPEED`, `MOVE_FUEL`, `MAX_ARMOR`, `ARMOR_PICKUP`, `WEAPONS`) plus a few named constants next to the systems they control: `MAX_SHAKE`, `MAX_TILT`, `DEATH_TICKS`, `MAX_SLOPE`, `SLIDE_SLOPE`, `IMPACT_LINGER`, crate drop odds in `maybeDropCrate()`, parallax factors, and spawn intervals in `updateBackground()`. Durations are in ticks (60 = 1 second). Obstacle, cloud and buried-rock counts scale with `W / VW`.
+Gameplay feel lives in `src/config.ts` (`GRAVITY`, `WIND_ACCEL`, `MAX_SPEED`, `MOVE_FUEL`, `MAX_ARMOR`, `ARMOR_PICKUP`, `WEAPONS`) plus per-arena wind and obstacle counts in `src/world/arenas.ts`, and a few named constants next to the systems they control: `MAX_SHAKE`, `MAX_TILT`, `DEATH_TICKS`, `MAX_SLOPE`, `SLIDE_SLOPE`, `IMPACT_LINGER`, crate drop odds in `maybeDropCrate()`, parallax factors, and spawn intervals in `updateBackground()`. Durations are in ticks (60 = 1 second). Obstacle, cloud and buried-rock counts scale with `W / VW`.
 
 ## Verifying changes
 
@@ -129,6 +141,7 @@ Clean up servers and temp files afterwards.
 | Key | Action |
 |---|---|
 | 2 / 3 / 4 | Start with that many players |
+| ← → (title) | Battlefield |
 | ← → | Aim (crank sound) |
 | ↑ ↓ | Power |
 | A / D | Drive (limited fuel per turn) |

@@ -4,7 +4,6 @@ import { activeBeam, activeMushroomClouds, pendingStrike } from '../combat/weapo
 import { H, VW } from '../config';
 import { game } from '../game/state';
 import { rgba } from '../util/color';
-import { MOON } from '../world/backdrop';
 import { backgroundLights } from '../world/background-war';
 import { monoliths } from '../world/obstacles';
 
@@ -40,8 +39,24 @@ export function glowSprite(color: string): HTMLCanvasElement {
 }
 
 export function collectLights() {
-  // `screen: true` lights are fixed to the screen; the rest are in the world.
-  const lights: Light[] = [{ x: MOON.x, y: MOON.y, r: 140, color: '#9fb4ff', a: 0.14, screen: true }];
+  // Arena body glow (fixed to screen): sun has a larger glow, twin lights both, none adds nothing.
+  const lights: Light[] = [];
+  const body = game.arena.body;
+  if (body.kind === 'sun') {
+    lights.push({ x: body.x, y: body.y, r: 180, color: body.glow, a: 0.22, screen: true });
+  } else if (body.kind === 'twin') {
+    lights.push({ x: body.x, y: body.y, r: 110, color: body.glow, a: 0.13, screen: true });
+    lights.push({
+      x: body.x + Math.round(body.r * 1.4),
+      y: body.y + Math.round(body.r * 0.6),
+      r: 80,
+      color: body.glow,
+      a: 0.09,
+      screen: true,
+    });
+  } else if (body.kind !== 'none') {
+    lights.push({ x: body.x, y: body.y, r: 140, color: body.glow, a: 0.14, screen: true });
+  }
   if (game.state === 'title') lights.push({ x: VW / 2, y: 70, r: 170, color: '#ff8a24', a: 0.22, screen: true });
   backgroundLights(lights);
   for (const m of monoliths) {

@@ -1,6 +1,7 @@
 import type { Explosion, Floater, Particle } from '../combat/effects';
 import type { Projectile } from '../combat/projectiles';
 import type { Tank } from '../combat/tanks';
+import { ARENAS, type Arena } from '../world/arenas';
 
 // Everything about the match in progress that more than one file changes.
 //
@@ -28,6 +29,7 @@ export const game = {
   banner: null as Banner | null,
   resolveDelay: 0,          // ticks to wait after everything settles
   ticks: 0,                 // simulation ticks since the page loaded (60 per second)
+  arena: ARENAS[0] as Arena, // the battlefield on screen (title preview or current match)
 
   projectiles: [] as Projectile[],
   explosions: [] as Explosion[],
